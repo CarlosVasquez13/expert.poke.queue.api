@@ -2,9 +2,10 @@ import uvicorn
 import json
 from fastapi import FastAPI
 from utils.database import execute_query_json
-from controllers.PokeRequestController import insert_pokemon_request, update_pokemon_request, select_pokemon_request, get_all_request
+from controllers.PokeRequestController import insert_pokemon_request, update_pokemon_request, select_pokemon_request, get_all_request, delete_request_registry
 from models.PokeRequest import PokemonRequest
 from fastapi.middleware.cors import CORSMiddleware
+import pyodbc
 
 app = FastAPI()
 app.add_middleware(
@@ -43,7 +44,9 @@ async def create_request(pokemon_request: PokemonRequest):
 async def update_request(pokemon_request: PokemonRequest):
     return await update_pokemon_request( pokemon_request )
 
-
+@app.delete("/api/request/{id}")
+async def delete_request(id: int):
+    return await delete_request_registry( id )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

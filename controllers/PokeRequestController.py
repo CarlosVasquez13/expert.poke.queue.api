@@ -42,8 +42,8 @@ async def update_pokemon_request( pokemon_request: PokemonRequest) -> dict:
 
 async def insert_pokemon_request( pokemon_request: PokemonRequest) -> dict:
     try:
-        query = " exec pokequeue.create_poke_request ? "
-        params = ( pokemon_request.pokemon_type,  )
+        query = " exec pokequeue.create_poke_request ?, ?"
+        params = ( pokemon_request.pokemon_type, pokemon_request.sample_size, )
         result = await execute_query_json( query , params, True )
         result_dict = json.loads(result)
 
@@ -64,6 +64,7 @@ async def get_all_request() -> dict:
             , r.url 
             , r.created 
             , r.updated
+            , r.sample_size
         from pokequeue.requests r 
         inner join pokequeue.status s 
         on r.id_status = s.id 
@@ -75,3 +76,35 @@ async def get_all_request() -> dict:
         id = record['ReportId']
         record['url'] = f"{record['url']}?{blob.generate_sas(id)}"
     return result_dict
+
+async def delete_request_registry(id: int) -> dict:
+    try:
+        # se verifica que el reporte exista en Azure SQL DB
+        pokemon_request = await select_pokemon_request(id)
+        if not pokemon_request:
+            raise HTTPException(status_code=404, detail="Request not found")
+        
+        # se verifica que el archivo CSV correspondiente
+        blob_url = pokemon_request[0].get("url")
+        if not blob_url:
+            logger.warning(f"No blob URL found for request id {id}")
+        else:
+            try:
+                blob = ABlob()
+                blob.delete_blob_csv(id)
+                logger.info(f"Blob deleted successfully for request id {id}")
+            except Exception as blob_error:
+                logger.warning(f"Failed to delete blob for request id {id}: {blob_error}")
+
+        query = "exec pokequeue.delete_poke_request ? "
+        params = (id,)
+        result = await execute_query_json(query, params, True)
+        result_dict = json.loads(result)
+
+        return result_dict
+    
+    except HTTPException:
+        raise  # Re-raise known HTTPExceptions
+    except Exception as e:
+        logger.error(f"Error al intentar eliminar el registro: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
